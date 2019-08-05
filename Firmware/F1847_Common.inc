@@ -137,16 +137,18 @@ SaveParams_L1	moviw	FSR0++
 ; Decrement routine for 16 bit timers
 ; Set FSR0H before calling these routines.
 ;
-DecTimer4	movlw	Timer4Hi
+DecTimer4	movlw	low Timer4Hi
 	bra	DecTimer
-DecTimer3	movlw	Timer3Hi
+DecTimer3	movlw	low Timer3Hi
 	bra	DecTimer
-DecTimer2	movlw	Timer2Hi
+DecTimer2	movlw	low Timer2Hi
 	bra	DecTimer
-DecTimer1	movlw	Timer1Hi
+DecTimer1	movlw	low Timer1Hi
 ;DecTimer
 ; entry: FSR=Timer(n)Hi
 DecTimer	MOVWF	FSR0L
+	movlw	high Timer1Hi
+	movwf	FSR0H
 	MOVIW	FSR0--	;TimerNHi
 	IORWF	INDF0,W	;TimerNLo
 	SKPNZ

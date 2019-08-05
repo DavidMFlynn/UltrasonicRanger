@@ -222,6 +222,7 @@ kMaxMode	EQU	.0
 	SWFlags
 ;
 	RangerFlags
+	RangerFlags2
 	Range1
 	Range2
 	Range3
@@ -262,10 +263,15 @@ kMaxMode	EQU	.0
 ;--------------------------------------------------------------
 ;---RangerFlags---
 #Define	TriggerFlag	RangerFlags,0
-#Define	Timing1Flag	RangerFlags,1
-#Define	Timing2Flag	RangerFlags,2
-#Define	Timing3Flag	RangerFlags,3
-#Define	Timing4Flag	RangerFlags,4
+;
+#Define	Timing1Flag	RangerFlags2,0
+#Define	Timing2Flag	RangerFlags2,1
+#Define	Timing3Flag	RangerFlags2,2
+#Define	Timing4Flag	RangerFlags2,3
+#Define	Timing1Go	RangerFlags2,4
+#Define	Timing2Go	RangerFlags2,5
+#Define	Timing3Go	RangerFlags2,6
+#Define	Timing4Go	RangerFlags2,7
 ;
 ;---SWFlags bits---
 #Define	SW1_Flag	SWFlags,0
@@ -487,9 +493,9 @@ SystemTick_end:
 	movwi	FSR1++
 	moviw	FSR0++
 	movwi	FSR1++
-;	movlb	5	;bank 5
-;	movlw	CCPxCON_Falling_Val
-;	movwf	CCP1CON
+	movlb	5	;bank 5
+	movlw	CCPxCON_Falling_Val
+	movwf	CCP1CON
 	bra	Capture1_Done
 ;
 ; Capture_A = CCPRn - Capture1StartTime
@@ -497,10 +503,11 @@ SystemTick_end:
 Capture1_Calc	bcf	Timing1Flag
 	call	Capture_A_Calc
 	movwf	Range1
+	bcf	Timing1Go
 ;
-;	movlb	5	;bank 5
-;	movlw	CCPxCON_Rising_Val
-;	movwf	CCP1CON	
+	movlb	5	;bank 5
+	movlw	CCPxCON_Rising_Val
+	movwf	CCP1CON	
 ;	
 Capture1_Done	movlb	0	;bank 0
 	bcf	PIR1,CCP1IF
@@ -526,9 +533,9 @@ Capture1_end:
 	movwi	FSR1++
 	moviw	FSR0++
 	movwi	FSR1++
-;	movlb	5	;bank 5
-;	movlw	CCPxCON_Falling_Val
-;	movwf	CCP2CON
+	movlb	5	;bank 5
+	movlw	CCPxCON_Falling_Val
+	movwf	CCP2CON
 	bra	Capture2_Done
 ;
 ; Capture_A = CCPRn - Capture2StartTime
@@ -536,10 +543,11 @@ Capture1_end:
 Capture2_Calc	bcf	Timing2Flag
 	call	Capture_A_Calc
 	movwf	Range2
+	bcf	Timing2Go
 ;
-;	movlb	5	;bank 5
-;	movlw	CCPxCON_Rising_Val
-;	movwf	CCP2CON	
+	movlb	5	;bank 5
+	movlw	CCPxCON_Rising_Val
+	movwf	CCP2CON	
 ;	
 Capture2_Done	movlb	0	;bank 0
 	bcf	PIR2,CCP2IF
@@ -565,9 +573,9 @@ Capture2_end:
 	movwi	FSR1++
 	moviw	FSR0++
 	movwi	FSR1++
-;	movlb	6	;bank 6
-;	movlw	CCPxCON_Falling_Val
-;	movwf	CCP3CON
+	movlb	6	;bank 6
+	movlw	CCPxCON_Falling_Val
+	movwf	CCP3CON
 	bra	Capture3_Done
 ;
 ; Capture_A = CCPRn - Capture3StartTime
@@ -575,10 +583,11 @@ Capture2_end:
 Capture3_Calc	bcf	Timing3Flag
 	call	Capture_A_Calc
 	movwf	Range3
+	bcf	Timing3Go
 ;
-;	movlb	6	;bank 6
-;	movlw	CCPxCON_Rising_Val
-;	movwf	CCP3CON	
+	movlb	6	;bank 6
+	movlw	CCPxCON_Rising_Val
+	movwf	CCP3CON	
 ;	
 Capture3_Done	movlb	0	;bank 0
 	bcf	PIR3,CCP3IF
@@ -604,9 +613,9 @@ Capture3_end:
 	movwi	FSR1++
 	moviw	FSR0++
 	movwi	FSR1++
-;	movlb	6	;bank 6
-;	movlw	CCPxCON_Falling_Val
-;	movwf	CCP4CON
+	movlb	6	;bank 6
+	movlw	CCPxCON_Falling_Val
+	movwf	CCP4CON
 	bra	Capture4_Done
 ;
 ; Capture_A = CCPRn - Capture4StartTime
@@ -614,10 +623,11 @@ Capture3_end:
 Capture4_Calc	bcf	Timing4Flag
 	call	Capture_A_Calc
 	movwf	Range4
+	bcf	Timing4Go
 ;
-;	movlb	6	;bank 6
-;	movlw	CCPxCON_Rising_Val
-;	movwf	CCP4CON	
+	movlb	6	;bank 6
+	movlw	CCPxCON_Rising_Val
+	movwf	CCP4CON	
 ;	
 Capture4_Done	movlb	0	;bank 0
 	bcf	PIR3,CCP4IF
@@ -725,6 +735,7 @@ ML_Ser_End:
 ; State 9	Timing Sensor 4
 ;
 MaxAquisitionTime	EQU	.20	;0.2 Seconds
+;
 C_State0	movlb	0	;Bank 0
 	movf	CaptureState,F
 	SKPZ
@@ -739,9 +750,21 @@ C_State1	movlw	0x01
 	SKPZ
 	bra	C_State2
 ;
-	bcf	Timing1Flag	;Capture Start time
+	bcf	Timing1Flag
+	bsf	Timing1Go
+; paranoid config of CCP
+	movlb	1	;Bnak 1
+	bcf	PIE1,CCP1IE	;Disable interrupt
+	movlb	5	;bank 5
+	movlw	CCPxCON_Rising_Val
+	movwf	CCP1CON
+	movlb	0	;Bank 0
+	bcf	PIR1,CCP1IF	;clear just in case
+	movlb	1	;Bnak 1
+	bsf	PIE1,CCP1IE	;Enable interrupt
+;
 	movlb	2	;Bank 2
-	bsf	Sensor1Trig	; ISR will set Timing1Flag
+	bsf	Sensor1Trig
 	call	Delay10uS
 	bcf	Sensor1Trig
 	movlb	0	;Bank 0
@@ -758,7 +781,7 @@ C_State2	movlw	0x02
 	SKPNZ
 	bra	C_State2_TO
 ;
-	btfsc	Timing1Flag
+	btfsc	Timing1Go
 	bra	C_State_end
 	bra	C_State_Next
 ;
@@ -771,9 +794,22 @@ C_State3	movlw	0x03
 	SKPZ
 	bra	C_State4
 ;
-	bcf	Timing2Flag	;Capture Start time
+	bcf	Timing2Flag
+	bsf	Timing2Go
+;
+; paranoid config of CCP
+	movlb	1	;Bnak 1
+	bcf	PIE2,CCP2IE	;Disable interrupt
+	movlb	5	;bank 5
+	movlw	CCPxCON_Rising_Val
+	movwf	CCP2CON
+	movlb	0	;Bank 0
+	bcf	PIR2,CCP2IF	;clear just in case
+	movlb	1	;Bnak 1
+	bsf	PIE2,CCP2IE	;Enable interrupt
+;
 	movlb	2	;Bank 2
-	bsf	Sensor2Trig	; ISR will set Timing1Flag
+	bsf	Sensor2Trig
 	call	Delay10uS
 	bcf	Sensor2Trig
 	movlb	0	;Bank 0
@@ -790,12 +826,12 @@ C_State4	movlw	0x04
 	SKPNZ
 	bra	C_State4_TO
 ;
-	btfsc	Timing2Flag
+	btfsc	Timing2Go
 	bra	C_State_end
 	bra	C_State_Next
 ;
-C_State4_TO	bcf	Timing2Flag	;cancel
-	CLRF	Range2	; no echo
+C_State4_TO	bcf	Timing2Go	;cancel
+	clrf	Range2	; no echo
 	bra	C_State_Next
 ;
 C_State5	movlw	0x05
@@ -803,9 +839,21 @@ C_State5	movlw	0x05
 	SKPZ
 	bra	C_State6
 ;
-	bcf	Timing3Flag	;Capture Start time
+	bcf	Timing3Flag
+	bsf	Timing3Go
+; paranoid config of CCP
+	movlb	1	;Bnak 1
+	bcf	PIE3,CCP3IE	;Disable interrupt
+	movlb	6	;bank 5
+	movlw	CCPxCON_Rising_Val
+	movwf	CCP3CON
+	movlb	0	;Bank 0
+	bcf	PIR3,CCP3IF	;clear just in case
+	movlb	1	;Bnak 1
+	bsf	PIE3,CCP3IE	;Enable interrupt
+;
 	movlb	2	;Bank 2
-	bsf	Sensor3Trig	; ISR will set Timing1Flag
+	bsf	Sensor3Trig
 	call	Delay10uS
 	bcf	Sensor3Trig
 	movlb	0	;Bank 0
@@ -822,22 +870,34 @@ C_State6	movlw	0x06
 	SKPNZ
 	bra	C_State6_TO
 ;
-	btfsc	Timing3Flag
+	btfsc	Timing3Go
 	bra	C_State_end
 	bra	C_State_Next
 ;
 C_State6_TO	bcf	Timing3Flag	;cancel
-	CLRF	Range3	; no echo
+	clrf	Range3	; no echo
 	bra	C_State_Next
 ;
 C_State7	movlw	0x07
 	subwf	CaptureState,W
 	SKPZ
-	bra	C_State6
+	bra	C_State8
 ;
-	bcf	Timing4Flag	;Capture Start time
+	bcf	Timing4Flag
+	bsf	Timing4Go
+; paranoid config of CCP
+	movlb	1	;Bnak 1
+	bcf	PIE3,CCP4IE	;Disable interrupt
+	movlb	6	;bank 5
+	movlw	CCPxCON_Rising_Val
+	movwf	CCP4CON
+	movlb	0	;Bank 0
+	bcf	PIR3,CCP4IF	;clear just in case
+	movlb	1	;Bnak 1
+	bsf	PIE3,CCP4IE	;Enable interrupt
+;
 	movlb	2	;Bank 2
-	bsf	Sensor4Trig	; ISR will set Timing1Flag
+	bsf	Sensor4Trig
 	call	Delay10uS
 	bcf	Sensor4Trig
 	movlb	0	;Bank 0
@@ -854,7 +914,7 @@ C_State8	movlw	0x08
 	SKPNZ
 	bra	C_State8_TO
 ;
-	btfsc	Timing4Flag
+	btfsc	Timing4Go
 	bra	C_State_end
 	bra	C_State_Next
 ;
@@ -900,6 +960,17 @@ InitializeIO	MOVLB	0x01	; select bank 1
 	movwf	ANSELA
 	movlw	ANSELB_Val
 	movwf	ANSELB
+;
+;SPI MISO >> SDI1 RB1, default
+;SPI CLK >> RB4, default
+	movlb	2	;bank 2
+	bsf	APFCON0,RXDTSEL	;RX >> RB2
+	bsf	APFCON0,SDO1SEL	;SPI MOSI >> SDO1 RA6
+;
+	bsf	APFCON0,CCP2SEL	;CCP2 >> RA7
+;
+	bsf	APFCON1,TXCKSEL	;TX >> RB5
+;
 ;
 ;Setup T2 for 100/s
 	movlb	0	; bank 0

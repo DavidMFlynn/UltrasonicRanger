@@ -190,6 +190,7 @@ IDString	brw
 	retlw	'F'
 	retlw	'E'
 	retlw	' '
+	retlw	'U'
 	retlw	'R'
 	retlw	'a'
 	retlw	'n'
