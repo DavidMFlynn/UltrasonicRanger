@@ -227,6 +227,7 @@ kMaxMode	EQU	.0
 	Range2
 	Range3
 	Range4
+	RangeScratch:2		;Used by ISR
 ;
 	Capture1StartTime:2
 	Capture2StartTime:2
@@ -263,6 +264,11 @@ kMaxMode	EQU	.0
 ;--------------------------------------------------------------
 ;---RangerFlags---
 #Define	TriggerFlag	RangerFlags,0
+#Define	Sensor1Active	RangerFlags,1
+#Define	Sensor2Active	RangerFlags,2
+#Define	Sensor3Active	RangerFlags,3
+#Define	Sensor4Active	RangerFlags,4
+#Define	AutoTrigger	RangerFlags,5
 ;
 #Define	Timing1Flag	RangerFlags2,0
 #Define	Timing2Flag	RangerFlags2,1
@@ -501,6 +507,8 @@ SystemTick_end:
 ; Capture_A = CCPRn - Capture1StartTime
 ; Range1 = Capture_A / 32
 Capture1_Calc	bcf	Timing1Flag
+	movf	Range1,W
+	movwf	RangeScratch
 	call	Capture_A_Calc
 	movwf	Range1
 	bcf	Timing1Go
@@ -541,6 +549,8 @@ Capture1_end:
 ; Capture_A = CCPRn - Capture2StartTime
 ; Range2 = Capture_A / 32
 Capture2_Calc	bcf	Timing2Flag
+	movf	Range2,W
+	movwf	RangeScratch
 	call	Capture_A_Calc
 	movwf	Range2
 	bcf	Timing2Go
@@ -581,6 +591,8 @@ Capture2_end:
 ; Capture_A = CCPRn - Capture3StartTime
 ; Range3 = Capture_A / 32
 Capture3_Calc	bcf	Timing3Flag
+	movf	Range3,W
+	movwf	RangeScratch
 	call	Capture_A_Calc
 	movwf	Range3
 	bcf	Timing3Go
@@ -621,6 +633,8 @@ Capture3_end:
 ; Capture_A = CCPRn - Capture4StartTime
 ; Range4 = Capture_A / 32
 Capture4_Calc	bcf	Timing4Flag
+	movf	Range4,W
+	movwf	RangeScratch
 	call	Capture_A_Calc
 	movwf	Range4
 	bcf	Timing4Go
@@ -654,6 +668,8 @@ Capture_A_Calc	moviw	FSR0++	;CCPRxL
 	moviw	FSR1++	;CapturexStartTime+1
 	subwfb	Capture_A+1,F
 ;
+	clrf	RangeScratch+1
+;
 	lsrf	Capture_A+1,F
 	rrf	Capture_A,F
 	lsrf	Capture_A+1,F
@@ -663,10 +679,27 @@ Capture_A_Calc	moviw	FSR0++	;CCPRxL
 	lsrf	Capture_A+1,F
 	rrf	Capture_A,F
 	lsrf	Capture_A+1,F
-	rrf	Capture_A,W
+	rrf	Capture_A,F
 	movf	Capture_A+1,F
 	SKPZ		;Is Capture_A/32 > 255?
-	movlw	0xFF	; Yes
+	bra	Capture_A_Calc_Err	; Yes, error
+;
+	movf	Capture_A,W
+	subwf	RangeScratch,W	;W=RangeScratch-Capture_A
+	SKPNB		;RangeScratch>=Capture_A?
+	bra	Capture_A_Calc_Av	; No
+	movf	Capture_A,W
+	return
+;
+Capture_A_Calc_Av	movf	Capture_A,W
+	bra	Capture_A_Calc_Av2
+;
+Capture_A_Calc_Err	movlw	0xFF
+Capture_A_Calc_Av2	addwf	RangeScratch,F
+	movlw	0x00
+	addwfc	RangeScratch+1,F
+	lsrf	RangeScratch+1,F
+	rrf	RangeScratch,W
 	return
 ;
 ;=========================================================================================
@@ -740,15 +773,25 @@ C_State0	movlb	0	;Bank 0
 	movf	CaptureState,F
 	SKPZ
 	bra	C_State1
-	btfss	TriggerFlag
-	bra	C_State_end
-	bcf	TriggerFlag
+;
+	btfsc	TriggerFlag	;Triggered?
+	bra	C_State0_Trig	; Yes
+;
+	btfss	AutoTrigger	;Auto-Trigger?
+	bra	C_State_end	; No
+	
+C_State0_Trig	bcf	TriggerFlag
 	bra	C_State_Next
+	
+	
 ;-------
 C_State1	movlw	0x01
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State2
+;
+	btfss	Sensor1Active
+	bra	C_State_Next
 ;
 	bcf	Timing1Flag
 	bsf	Timing1Go
@@ -777,6 +820,9 @@ C_State2	movlw	0x02
 	SKPZ
 	bra	C_State3
 ;
+	btfss	Sensor1Active
+	bra	C_State_Next
+;
 	movf	Timer3Lo,F
 	SKPNZ
 	bra	C_State2_TO
@@ -793,6 +839,9 @@ C_State3	movlw	0x03
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State4
+;
+	btfss	Sensor2Active
+	bra	C_State_Next
 ;
 	bcf	Timing2Flag
 	bsf	Timing2Go
@@ -822,6 +871,9 @@ C_State4	movlw	0x04
 	SKPZ
 	bra	C_State5
 ;
+	btfss	Sensor2Active
+	bra	C_State_Next
+;
 	movf	Timer3Lo,F
 	SKPNZ
 	bra	C_State4_TO
@@ -838,6 +890,9 @@ C_State5	movlw	0x05
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State6
+;
+	btfss	Sensor3Active
+	bra	C_State_Next
 ;
 	bcf	Timing3Flag
 	bsf	Timing3Go
@@ -866,6 +921,9 @@ C_State6	movlw	0x06
 	SKPZ
 	bra	C_State7
 ;
+	btfss	Sensor3Active
+	bra	C_State_Next
+;
 	movf	Timer3Lo,F
 	SKPNZ
 	bra	C_State6_TO
@@ -882,6 +940,9 @@ C_State7	movlw	0x07
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State8
+;
+	btfss	Sensor4Active
+	bra	C_State_Next
 ;
 	bcf	Timing4Flag
 	bsf	Timing4Go
@@ -909,6 +970,9 @@ C_State8	movlw	0x08
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State9
+;
+	btfss	Sensor4Active
+	bra	C_State_Next
 ;
 	movf	Timer3Lo,F
 	SKPNZ

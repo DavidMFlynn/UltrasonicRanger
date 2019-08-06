@@ -22,6 +22,7 @@ kCmd_SetMode	EQU	0x81	;+1 data (SysMode), return ACK
 kCmd_GetMode	EQU	0x01
 kCmd_GetRange	EQU	0x82	;+1 data Return Sensor(n)
 kCmd_Trigger	EQU	0x83	;return ACK
+kCmd_ContTrigger	EQU	0x84	;return ACK
 ;
 ;
 kCmd_SaveParams	EQU	0x94	;Save all eeprom params, return ACK
@@ -97,6 +98,7 @@ Cmd_GetMode_end:
 	bra	kCmd_GetRange_end
 ; Get sensor data for sensor n
 	moviw	FSR1++
+	movwf	Param78
 	andlw	0x03
 	addlw	low Range1
 	movwf	FSR1L
@@ -104,6 +106,23 @@ Cmd_GetMode_end:
 	movwf	FSR1H
 	moviw	FSR1++
 	movwi	FSR0++
+;
+	movf	Param78,W
+	SKPNZ
+	bsf	Sensor1Active
+	movlw	0x01
+	subwf	Param78,W
+	SKPNZ
+	bsf	Sensor2Active
+	movlw	0x02
+	subwf	Param78,W
+	SKPNZ
+	bsf	Sensor3Active
+	movlw	0x03
+	subwf	Param78,W
+	SKPNZ
+	bsf	Sensor4Active
+;
 	goto	RS232_Send_S0
 ;
 kCmd_GetRange_end:
@@ -116,6 +135,15 @@ kCmd_GetRange_end:
 	bsf	TriggerFlag
 	goto	TX_ACK
 kCmd_Trigger_end:
+;---kCmd_ContTrigger--------------------
+	movlw	kCmd_ContTrigger
+	subwf	Param78,W
+	SKPZ
+	bra	kCmd_ContTrigger_end
+; Set trigger flag
+	bsf	AutoTrigger	;tc move to its own CMD
+	goto	TX_ACK
+kCmd_ContTrigger_end:
 ;---kCmd_SaveParams-----------------
 	movlw	kCmd_SaveParams
 	subwf	Param78,W	;aka RX_Data
