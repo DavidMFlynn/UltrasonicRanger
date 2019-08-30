@@ -2,7 +2,7 @@
 ;
 ;    Filename:      UltrasonicRanger.asm
 ;    Created:       8/4/2019
-;    File Version:  1.1d1   8/4/2019
+;    File Version:  1.1d2   8/30/2019
 ;
 ;    Author:        David M. Flynn
 ;    Company:       Oxford V.U.E., Inc.
@@ -21,6 +21,7 @@
 ;
 ;
 ;    History:
+; 1.1d2   8/30/2019	Added Wait State between sensor triggers
 ; 1.1d1   8/4/2019	Copied from TetheredJoy.
 ; 1.1a1   6/10/2019 	Working. Time to do some tests.
 ;
@@ -757,17 +758,23 @@ ML_Ser_End:
 ;----------------------
 ; Do the captures
 ;
-; State 0	Idle
-; State 1	Trigger Sensor 1
-; State 2	Timing Sensor 1
-; State 3	Trigger Sensor 2
-; State 4	Timing Sensor 2
-; State 5	Trigger Sensor 3
-; State 6	Timing Sensor 3
-; State 7	Trigger Sensor 4
-; State 9	Timing Sensor 4
+kScanStateIdle	EQU	0	; State 0, Idle
+kScanStateTrigger1	EQU	1	; State 1, Trigger Sensor 1
+kScanStateTiming1	EQU	2	; State 2, Timing Sensor 1
+kScanStateWait1	EQU	3	; Wait for 1 to go quiet
+kScanStateTrigger2	EQU	4	; State 3, Trigger Sensor 2
+kScanStateTiming2	EQU	5	; State 4, Timing Sensor 2
+kScanStateWait2	EQU	6	; Wait for 1 to go quiet
+kScanStateTrigger3	EQU	7	; State 5, Trigger Sensor 3
+kScanStateTiming3	EQU	8	; State 6, Timing Sensor 3
+kScanStateWait3	EQU	9	; Wait for 1 to go quiet
+kScanStateTrigger4	EQU	10	; State 7, Trigger Sensor 4
+kScanStateTiming4	EQU	11	; State 9, Timing Sensor 4
+kScanStateWait4	EQU	12	; Wait for 1 to go quiet
+;
 ;
 MaxAquisitionTime	EQU	.20	;0.2 Seconds
+DwellStateTime	EQU	.10	;0.1 Seconds
 ;
 C_State0	movlb	0	;Bank 0
 	movf	CaptureState,F
@@ -785,7 +792,7 @@ C_State0_Trig	bcf	TriggerFlag
 	
 	
 ;-------
-C_State1	movlw	0x01
+C_State1	movlw	kScanStateTrigger1
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State2
@@ -815,10 +822,10 @@ C_State1	movlw	0x01
 	movwf	Timer3Lo
 	bra	C_State_Next
 ;
-C_State2	movlw	0x02
+C_State2	movlw	kScanStateTiming1
 	subwf	CaptureState,W
 	SKPZ
-	bra	C_State3
+	bra	C_State2A
 ;
 	btfss	Sensor1Active
 	bra	C_State_Next
@@ -829,13 +836,29 @@ C_State2	movlw	0x02
 ;
 	btfsc	Timing1Go
 	bra	C_State_end
+	movlw	DwellStateTime
+	movwf	Timer3Lo
 	bra	C_State_Next
 ;
 C_State2_TO	bcf	Timing1Flag	;cancel
 	CLRF	Range1	; no echo
 	bra	C_State_Next
+;	
+C_State2A	movlw	kScanStateWait1
+	subwf	CaptureState,W
+	SKPZ
+	bra	C_State3
+;
+	btfss	Sensor1Active
+	bra	C_State_Next
+;
+	movf	Timer3Lo,F
+	SKPNZ
+	bra	C_State_Next
+	bra	C_State_end
+;
 ;-------
-C_State3	movlw	0x03
+C_State3	movlw	kScanStateTrigger2
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State4
@@ -866,10 +889,10 @@ C_State3	movlw	0x03
 	movwf	Timer3Lo
 	bra	C_State_Next
 ;
-C_State4	movlw	0x04
+C_State4	movlw	kScanStateTiming2
 	subwf	CaptureState,W
 	SKPZ
-	bra	C_State5
+	bra	C_State4A
 ;
 	btfss	Sensor2Active
 	bra	C_State_Next
@@ -880,13 +903,30 @@ C_State4	movlw	0x04
 ;
 	btfsc	Timing2Go
 	bra	C_State_end
+	movlw	DwellStateTime
+	movwf	Timer3Lo
 	bra	C_State_Next
 ;
 C_State4_TO	bcf	Timing2Go	;cancel
 	clrf	Range2	; no echo
 	bra	C_State_Next
 ;
-C_State5	movlw	0x05
+;	
+C_State4A	movlw	kScanStateWait2
+	subwf	CaptureState,W
+	SKPZ
+	bra	C_State5
+;
+	btfss	Sensor2Active
+	bra	C_State_Next
+;
+	movf	Timer3Lo,F
+	SKPNZ
+	bra	C_State_Next
+	bra	C_State_end
+;
+;-------------
+C_State5	movlw	kScanStateTrigger3
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State6
@@ -916,10 +956,10 @@ C_State5	movlw	0x05
 	movwf	Timer3Lo
 	bra	C_State_Next
 ;
-C_State6	movlw	0x06
+C_State6	movlw	kScanStateTiming3
 	subwf	CaptureState,W
 	SKPZ
-	bra	C_State7
+	bra	C_State6A
 ;
 	btfss	Sensor3Active
 	bra	C_State_Next
@@ -930,13 +970,30 @@ C_State6	movlw	0x06
 ;
 	btfsc	Timing3Go
 	bra	C_State_end
+	movlw	DwellStateTime
+	movwf	Timer3Lo
 	bra	C_State_Next
 ;
 C_State6_TO	bcf	Timing3Flag	;cancel
 	clrf	Range3	; no echo
 	bra	C_State_Next
 ;
-C_State7	movlw	0x07
+;	
+C_State6A	movlw	kScanStateWait3
+	subwf	CaptureState,W
+	SKPZ
+	bra	C_State7
+;
+	btfss	Sensor3Active
+	bra	C_State_Next
+;
+	movf	Timer3Lo,F
+	SKPNZ
+	bra	C_State_Next
+	bra	C_State_end
+;
+;-----------
+C_State7	movlw	kScanStateTrigger4
 	subwf	CaptureState,W
 	SKPZ
 	bra	C_State8
@@ -966,10 +1023,10 @@ C_State7	movlw	0x07
 	movwf	Timer3Lo
 	bra	C_State_Next
 ;
-C_State8	movlw	0x08
+C_State8	movlw	kScanStateTiming4
 	subwf	CaptureState,W
 	SKPZ
-	bra	C_State9
+	bra	C_State8A
 ;
 	btfss	Sensor4Active
 	bra	C_State_Next
@@ -980,12 +1037,29 @@ C_State8	movlw	0x08
 ;
 	btfsc	Timing4Go
 	bra	C_State_end
+	movlw	DwellStateTime
+	movwf	Timer3Lo
 	bra	C_State_Next
 ;
 C_State8_TO	bcf	Timing4Flag	;cancel
 	CLRF	Range4	; no echo
 	bra	C_State_Next
 ;
+;	
+C_State8A	movlw	kScanStateWait4
+	subwf	CaptureState,W
+	SKPZ
+	bra	C_State9
+;
+	btfss	Sensor4Active
+	bra	C_State_Next
+;
+	movf	Timer3Lo,F
+	SKPNZ
+	bra	C_State_Next
+	bra	C_State_end
+;
+;-------------
 C_State9	clrf	CaptureState
 	bra	C_State_end
 ;
