@@ -2,7 +2,7 @@
 ;
 ;    Filename:      UltrasonicRanger.asm
 ;    Created:       8/4/2019
-;    File Version:  1.1d3   9/1/2019
+;    File Version:  1.1d2   8/30/2019
 ;
 ;    Author:        David M. Flynn
 ;    Company:       Oxford V.U.E., Inc.
@@ -17,13 +17,10 @@
 ;    Features: 	TTL Packet Serial
 ;	Interfaces for:
 ;	  4 Ultrasonic Distance Sensors
-;	   or a Lidar-Lite and 3 Ultrasonic Sensors
 ;	  System LED
 ;
-;    Lidar value: uS/32, multiply by 32 to get mm subtract about 220 for latency.
 ;
 ;    History:
-; 1.1d3   9/1/2019	Modify sensor 4 for Lidar-lite
 ; 1.1d2   8/30/2019	Added Wait State between sensor triggers
 ; 1.1d1   8/4/2019	Copied from TetheredJoy.
 ; 1.1a1   6/10/2019 	Working. Time to do some tests.
@@ -100,7 +97,6 @@
 	constant	RP_AddressBytes=1
 	constant	RP_DataBytes=4
 	constant	UseRS232SyncBytes=1
-	constant	UseLidarLite=1	;J5 is a Lidar-Lite
 kRS232SyncByteValue	EQU	0xDD
 	constant	UseRS232Chksum=1
 ;
@@ -609,8 +605,7 @@ Capture3_Calc	bcf	Timing3Flag
 Capture3_Done	movlb	0	;bank 0
 	bcf	PIR3,CCP3IF
 Capture3_end:
-	if UseLidarLite==0
-;--------------- Chanel 3 is a 4th Ultrasonic sensor
+;---------------
 	btfss	PIR3,CCP4IF
 	bra	Capture4_end
 ;
@@ -651,51 +646,6 @@ Capture4_Calc	bcf	Timing4Flag
 ;	
 Capture4_Done	movlb	0	;bank 0
 	bcf	PIR3,CCP4IF
-;
-	else
-;
-;--------------- Chanel 3 ia a Lidar-Lite
-	btfss	PIR3,CCP4IF
-	bra	Capture4_end
-; Copy time to start time
-	movlw	low CCPR4L
-	movwf	FSR0L
-	movlw	high CCPR4L
-	movwf	FSR0H
-	movlw	low Capture4StartTime
-	movwf	FSR1L
-	movlw	high Capture4StartTime
-	movwf	FSR1H
-;	
-	btfsc	Timing4Flag
-	bra	Capture4_Calc
-;
-	bsf	Timing4Flag
-	moviw	FSR0++
-	movwi	FSR1++
-	moviw	FSR0++
-	movwi	FSR1++
-	movlb	6	;bank 6
-	movlw	CCPxCON_Falling_Val
-	movwf	CCP4CON
-	bra	Capture4_Done
-;
-; Capture_A = CCPRn - Capture4StartTime
-; Range4 = Capture_A / 32
-Capture4_Calc	bcf	Timing4Flag
-	call	Capture_A_CalcLidar
-	movwf	Range4
-	bcf	Timing4Go
-;
-	movlb	6	;bank 6
-	movlw	CCPxCON_Rising_Val
-	movwf	CCP4CON	
-;	
-Capture4_Done	movlb	0	;bank 0
-	bcf	PIR3,CCP4IF
-;
-	endif
-	
 Capture4_end:
 ;
 ;==================================================================================
@@ -708,8 +658,6 @@ IRQ_Ser	BTFSS	PIR1,RCIF	;RX has a byte?
 IRQ_Ser_End:
 ;-----------------------------------------------------------------------------------------
 	retfie		; return from interrupt
-;
-;Entry: FSR0 >> CCPR4L, FSR1 >> CaptureXStartTime, RangeScratch = old value
 ;
 Capture_A_Calc	moviw	FSR0++	;CCPRxL
 	movwf	Capture_A
@@ -754,35 +702,6 @@ Capture_A_Calc_Av2	addwf	RangeScratch,F
 	lsrf	RangeScratch+1,F
 	rrf	RangeScratch,W
 	return
-;
-;Entry: FSR0 >> CCPR4L, FSR1 >> CaptureXStartTime
-;
-Capture_A_CalcLidar	moviw	FSR0++	;CCPRxL
-	movwf	Capture_A
-	moviw	FSR0++	;CCPRxH
-	movwf	Capture_A+1
-;
-	moviw	FSR1++	;CapturexStartTime
-	subwf	Capture_A,F
-	moviw	FSR1++	;CapturexStartTime+1
-	subwfb	Capture_A+1,F
-;
-	lsrf	Capture_A+1,F
-	rrf	Capture_A,F
-	lsrf	Capture_A+1,F
-	rrf	Capture_A,F
-	lsrf	Capture_A+1,F
-	rrf	Capture_A,F
-	lsrf	Capture_A+1,F
-	rrf	Capture_A,F
-	lsrf	Capture_A+1,F
-	rrf	Capture_A,F
-	movf	Capture_A+1,F
-	movlw	0xFF
-	SKPNZ		;Is Capture_A/32 > 255?
-	movf	Capture_A,W	; No, return value
-	return		; Yes, error
-;
 ;
 ;=========================================================================================
 ;*****************************************************************************************
@@ -856,7 +775,6 @@ kScanStateWait4	EQU	12	; Wait for 1 to go quiet
 ;
 MaxAquisitionTime	EQU	.20	;0.2 Seconds
 DwellStateTime	EQU	.10	;0.1 Seconds
-DwellStateTimeLidar	EQU	.0	;not required
 ;
 C_State0	movlb	0	;Bank 0
 	movf	CaptureState,F
@@ -1075,8 +993,6 @@ C_State6A	movlw	kScanStateWait3
 	bra	C_State_end
 ;
 ;-----------
-	if UseLidarLite==0
-;--------- Ultrasonic on J5
 C_State7	movlw	kScanStateTrigger4
 	subwf	CaptureState,W
 	SKPZ
@@ -1142,86 +1058,6 @@ C_State8A	movlw	kScanStateWait4
 	SKPNZ
 	bra	C_State_Next
 	bra	C_State_end
-;
-	else
-;
-;--------- Lidar-Lite on J5
-C_State7	movlw	kScanStateTrigger4
-	subwf	CaptureState,W
-	SKPZ
-	bra	C_State8
-;
-	btfss	Sensor4Active	;In use?
-	bra	C_State_Next	; No
-;
-	bcf	Timing4Flag
-	bsf	Timing4Go
-;
-	movlb	2	;Bank 2
-	bcf	Sensor4Trig	;Trigger Low (Active)
-;
-; paranoid config of CCP
-; setup ccp to catch rising edge
-	movlb	1	;Bnak 1
-	bcf	PIE3,CCP4IE	;Disable interrupt
-	movlb	6	;bank 5
-	movlw	CCPxCON_Rising_Val
-	movwf	CCP4CON
-	movlb	0	;Bank 0
-	bcf	PIR3,CCP4IF	;clear just in case
-	movlb	1	;Bnak 1
-	bsf	PIE3,CCP4IE	;Enable interrupt
-;
-	movlb	0	;Bank 0
-	movlw	MaxAquisitionTime
-	movwf	Timer3Lo
-	bra	C_State_Next
-;
-C_State8	movlw	kScanStateTiming4
-	subwf	CaptureState,W
-	SKPZ
-	bra	C_State8A
-;
-	btfss	Sensor4Active
-	bra	C_State_Next
-;
-	movf	Timer3Lo,F
-	SKPNZ		;Timed out?
-	bra	C_State8_TO	; Yes
-;
-	btfsc	Timing4Go	;Timing done?
-	bra	C_State_end	; No
-;
-	movlb	2	;Bank 2
-	bsf	Sensor4Trig	;Trigger High (inactive)
-;
-	movlw	DwellStateTimeLidar
-	movwf	Timer3Lo
-	bra	C_State_Next
-;
-C_State8_TO	bcf	Timing4Flag	;cancel
-	CLRF	Range4	; no echo
-;
-	movlb	2	;Bank 2
-	bsf	Sensor4Trig	;Trigger High (inactive)
-;
-	bra	C_State_Next
-;
-;	
-C_State8A	movlw	kScanStateWait4
-	subwf	CaptureState,W
-	SKPZ
-	bra	C_State9
-;
-	btfss	Sensor4Active
-	bra	C_State_Next
-;
-	movf	Timer3Lo,F
-	SKPNZ
-	bra	C_State_Next
-	bra	C_State_end
-;	
-	endif
 ;
 ;-------------
 C_State9	clrf	CaptureState
@@ -1292,7 +1128,7 @@ InitializeIO	MOVLB	0x01	; select bank 1
 ;=======================
 ; Setup all 4 CCPs for capture
 	movlb	0	;Bank 0
-	movlw	T1CON_Val	;1uS / count
+	movlw	T1CON_Val
 	movwf	T1CON
 ;
 	movlb	5	;Bank 5
